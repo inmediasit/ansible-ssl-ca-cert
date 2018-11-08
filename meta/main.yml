@@ -1,0 +1,14 @@
+galaxy_info:
+  author: inmediasit
+  description: Create and sign SSL certificates using a CA certificate.
+  company: inmedias.it GmbH
+  license: GPLv2
+  min_ansible_version: 2.7
+  platforms:
+    - name: Debian
+      versions:
+        - stretch
+  galaxy_tags: 
+    - ssl
+    - certificates
+dependencies: []

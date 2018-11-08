@@ -1,0 +1,49 @@
+---
+# Certificate authority settings
+ca_cert: "inmediasCA.pem"
+ca_key: "inmediasCA.key"
+ca_key_password: "changeme"
+
+# Override these variables to point to the REMOTE path of the CA certificate and private key respectively.
+# If these variables are empty, ca_cert and ca_key are used, provided the respective files lie inside the files folder of this role.
+# Note that it is highly recommended to run this role on the ansible host, in order to not compromise your private key.
+ca_cert_path: ""
+ca_key_path: ""
+
+# Certificate files
+deploy_path: "/etc/ssl"
+common_name: "{{ server_fqdn if server_fqdn != '' else ansible_fqdn }}"
+key_name: "{{ common_name }}.key"
+key_password: "changeme"
+csr_name: "{{ common_name }}.csr"
+cert_name: "{{ common_name }}.crt"
+pkcs_name: "{{ common_name }}.pkcs"
+
+# Certificate signing information. Leaving these empty will cause the role to fall back to sane values provided by ansible.
+# If you take into consideration security best practises, it means you are running this role locally, so you would then need to override these values.
+server_fqdn: ""
+server_domain: ""
+server_ip: ""
+inventory_entry: ""
+
+# Extra hostname and/or IP address to include in the subject_alt_name.
+# You should override this in your playbook if you need it. 
+# Leaving this empty should not have any negative effects.
+extra_hostname: ""
+extra_ip: ""
+
+# Certificate validity settings
+# Note that the certificate will become invalid as soon as the CA certificate becomes invalid, regardless of what you override this value with.
+# cert_valid_[from|until] take the following date pattern: YYYYMMDDHHMMSSZ and should be UTC.
+# For your convenience, you can override cert_vaild_years instead and the role will hande everything for you.
+cert_valid_from: ""
+cert_valid_until: ""
+cert_valid_years: 50
+
+# Additional certificate parameters
+param_country_name: "DE"
+param_province_name: "Hamburg"
+param_locality_name: "Hamburg"
+param_organization_name: "Inmedias.it GmbH"
+param_organization_unit: "Support"
+param_email: "support[at]inmedias.it"

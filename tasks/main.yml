@@ -1,0 +1,112 @@
+---
+# tasks file for ssl-ca-cert
+
+- name: Registering variables.
+  set_fact:
+    ca_cert_path: "{{ ca_cert_path if ca_cert_path != '' else (role_path + '/files/' + ca_cert) }}"
+    ca_key_path: "{{ ca_key_path if ca_key_path != '' else (role_path + '/files/' + ca_key) }}"
+    key_path: "{{ deploy_path }}/{{ key_name }}"
+    csr_path: "{{ deploy_path }}/{{ csr_name }}"
+    cert_path: "{{ deploy_path }}/{{ cert_name }}"
+    pkcs_cert_path: "{{ deploy_path }}/{{ pkcs_name }}"
+    fqdn: "{{ server_fqdn if server_fqdn != '' else ansible_fqdn }}"
+    server_domain: "{{ server_domain if server_domain != '' else ansible_domain }}"
+    server_ip: "{{ server_ip if server_ip != '' else (ansible_default_ipv4.address | default('')) }}"
+    inventory_entry: "{{ inventory_entry if inventory_entry != '' else inventory_hostname }}"
+    cert_valid_from: "{{ cert_valid_from if cert_valid_from != '' else (lookup('pipe', 'date --utc +%Y%m%d%H%M%SZ')) }}"
+    cert_valid_years_cmd: "date -d '+{{ cert_valid_years }} years' --utc +%Y%m%d%H%M%SZ"
+
+- name: Evaluating certificate expiry date.
+  set_fact:
+    cert_valid_until: "{{ cert_valid_until if cert_valid_until != '' else (lookup('pipe', cert_valid_years_cmd )) }}"
+
+- name: Evaluating possible hostnames & IPs to sign the certificate with.
+  set_fact:
+    subject_alt_name:
+      - "DNS:{{ fqdn }}"
+      - "DNS:{{ inventory_entry }}"
+      - "{{ ('DNS:*.' + server_domain ) if '.' in server_domain else None }}"
+      - "{{ ('DNS:' + extra_hostname ) if extra_hostname != '' else None }}"
+      - "{{ ('IP:' + server_ip ) if '.' in server_ip else None }}"
+      - "{{ ('IP:' + inventory_entry ) if '.' in inventory_entry else None }}"
+      - "{{ ('IP:' + extra_ip ) if extra_ip != '' else None }}"
+
+- name: Filtering out invalid hostnames & IPs.
+  set_fact:
+    subject_alt_name: "{{ subject_alt_name | reject('equalto', '') | list }}"
+
+- debug:
+    msg: "[{{ item.name }}]: `{{ item.value }}`"
+  with_items:
+    - { name: "key_path", value: "{{ key_path }}" }
+    - { name: "csr_path", value: "{{ csr_path }}" }
+    - { name: "cert_path", value: "{{ cert_path }}" }
+    - { name: "pkcs_cert_path", value: "{{ pkcs_cert_path }}" }
+    - { name: "fqdn", value: "{{ fqdn }}" }
+    - { name: "server_domain", value: "{{ server_domain }}" }
+    - { name: "server_ip", value: "{{ server_ip }}" }
+    - { name: "inventory_entry", value: "{{ inventory_entry }}" }
+    - { name: "cert_valid_from", value: "{{ cert_valid_from }}" }
+    - { name: "cert_valid_until", value: "{{ cert_valid_until }}" }
+    - { name: "subject_alt_name", value: "{{ subject_alt_name }}" }
+
+
+- name: Generating the private key.
+  openssl_privatekey:
+    path: "{{ key_path }}"
+    passphrase: "{{ key_password }}"
+    cipher: aes256
+    size: 4096
+    type: RSA
+    state: present
+
+- name: Generating the certificate signing request.
+  openssl_csr:
+    path: "{{ csr_path }}"
+    privatekey_path: "{{ key_path }}"
+    privatekey_passphrase: "{{ key_password }}" 
+    common_name: "{{ fqdn }}"
+    country_name: "{{ param_country_name }}"
+    state_or_province_name: "{{ param_province_name }}"
+    locality_name: "{{ param_locality_name }}"
+    organization_name: "{{ param_organization_name }}"
+    organizational_unit_name: "{{ param_organization_unit }}"
+    email_address: "{{ param_email }}"
+    digest: sha256
+    key_usage:
+      - nonRepudiation
+      - digitalSignature
+      - keyEncipherment
+    key_usage_critical: true
+    extended_key_usage: 
+      - serverAuth
+    extended_key_usage_critical: true
+    subject_alt_name: "{{ subject_alt_name }}"
+    subject_alt_name_critical: true
+    state: present
+
+- name: Generating the CA-signed SSL certificate.
+  openssl_certificate:
+    path: "{{ cert_path }}"
+    provider: ownca
+    ownca_version: 3
+    ownca_path: "{{ ca_cert_path }}"
+    ownca_privatekey_path: "{{ ca_key_path }}"
+    ownca_privatekey_passphrase: "{{ ca_key_password }}"
+    ownca_not_before: "{{ cert_valid_from }}"
+    ownca_not_after: "{{ cert_valid_until }}"
+    csr_path: "{{ csr_path }}"
+
+- name: Generating the PKCS#12 certificate.
+  openssl_pkcs12:
+      action: export
+      path: "{{ pkcs_cert_path }}"
+      certificate_path: "{{ cert_path }}"
+      ca_certificates: "{{ ca_cert_path }}"
+      friendly_name: "{{ common_name }}"
+      privatekey_path: "{{ key_path }}"
+      privatekey_passphrase: "{{ key_password }}"
+      maciter_size: 1
+      iter_size: 2048
+      mode: 0600
+      state: present
